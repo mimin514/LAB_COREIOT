@@ -9,10 +9,10 @@
 #include "Wire.h"
 #include <ArduinoOTA.h>
 
-constexpr char WIFI_SSID[] = "";
-constexpr char WIFI_PASSWORD[] = "";
+constexpr char WIFI_SSID[] = "Min";
+constexpr char WIFI_PASSWORD[] = "123456789";
 
-constexpr char TOKEN[] = "";
+constexpr char TOKEN[] = "WjX0s4pntWD0IltmHxoR";
 
 constexpr char THINGSBOARD_SERVER[] = "app.coreiot.io";
 constexpr uint16_t THINGSBOARD_PORT = 1883U;
@@ -123,8 +123,7 @@ void setup() {
 }
 
 void loop() {
-  delay(1000);
-  Serial.print("HELO ");
+  delay(10);
   if (!reconnect()) {
     return;
   }
