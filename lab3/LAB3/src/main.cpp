@@ -2,11 +2,14 @@
 #include <HTTPClient.h>
 #include <DHT.h>
 
-#define WIFI_SSID "Wokwi-GUEST"
-#define WIFI_PASSWORD ""
+#define WIFI_SSID "NaNa"
+#define WIFI_PASSWORD "12356789"
 #define DHTPIN 15
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
+
+// Function prototype for mockReceiveFirmwareUrl
+void mockReceiveFirmwareUrl();
 
 // Biến giả lập URL firmware OTA nhận từ ThingsBoard
 String firmwareUrl = "https://github.com/mimin514/LAB_COREIOT/tree/main/lab3/LAB3/firmware_v2.bin"; // sẽ giả lập nhận từ MQTT
