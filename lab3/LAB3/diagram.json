@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "author": "My Nguyễn",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": -28.98,
+      "left": -24.23,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht1",
+      "top": -18.9,
+      "left": -159,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "dht1:VCC", "esp:5V", "red", [ "v96", "h124.85" ] ],
+    [ "dht1:SDA", "esp:15", "green", [ "v38.4", "h38.5", "v-105.6" ] ],
+    [ "dht1:GND", "esp:GND.1", "black", [ "v0" ] ]
+  ],
+  "dependencies": {},
+  "build": {
+    "platformio": {
+      "project": "."
+    }
+  }
+}

@@ -1,173 +1,117 @@
-#define LED_PIN 13
-#include <Arduino.h>
 #include <WiFi.h>
+#include <PubSubClient.h>
 #include <HTTPClient.h>
 #include <Update.h>
-#include <Arduino_MQTT_Client.h>
-#include <ThingsBoard.h>
-#include "DHT.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include <ArduinoJson.h>
 
-constexpr char WIFI_SSID[] = "ACLAB";
-constexpr char WIFI_PASSWORD[] = "ACLAB2023";
-constexpr char TOKEN[] = "i5Zu2KNmPlkALJxTwlyJ";
-constexpr char THINGSBOARD_SERVER[] = "app.coreiot.io";
-constexpr uint16_t THINGSBOARD_PORT = 1883U;
-constexpr uint32_t MAX_MESSAGE_SIZE = 1024U;
-constexpr uint32_t SERIAL_DEBUG_BAUD = 115200U;
+const char* ssid = "NhuHa 2.4G";
+const char* password = "Nhuha1972@";
+const char* mqtt_server = "app.coreiot.io"; // CoreIoT server
+const int mqtt_port = 1883;
+const char* token = "jyc9u1tesgpc55n4zelk"; // Access token from CoreIoT
 
-const String firmware_url = "http://app.coreiot.io:8080/api/v1/i5Zu2KNmPlkALJxTwlyJ/firmware"; // Đường dẫn OTA firmware
-
-volatile int ledMode = 0;
-volatile uint16_t blinkingInterval = 5000U;
+const char* current_version = "1"; // Current firmware version
 
 WiFiClient wifiClient;
-Arduino_MQTT_Client mqttClient(wifiClient);
-ThingsBoard tb(mqttClient, MAX_MESSAGE_SIZE);
-DHT dht11(27, DHT11);
+PubSubClient client(wifiClient);
 
-void onAttributesReceived(const JsonObjectConst &data) {
-  if (data.containsKey("ledMode")) {
-    ledMode = data["ledMode"];
-    Serial.printf("Updated LED mode: %d\n", ledMode);
-  }
-}
-
-void requestSharedAttributes() {
-  tb.Shared_Attributes_Request(Attribute_Request_Callback(onAttributesReceived));
-}
-
-void InitWiFi() {
-  Serial.println("Connecting to WiFi...");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    Serial.print(".");
-  }
-  Serial.println("\nConnected to WiFi");
-  Serial.println(WiFi.localIP());
-}
-
-void WiFi_Task(void *pvParameters) {
-  while (1) {
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("WiFi lost. Reconnecting...");
-      InitWiFi();
-    }
-    vTaskDelay(pdMS_TO_TICKS(10000));
-  }
-}
-
-void LED_Task(void *pvParameters) {
-  pinMode(LED_PIN, OUTPUT);
-  while (1) {
-    digitalWrite(LED_PIN, ledMode ? HIGH : LOW);
-    vTaskDelay(pdMS_TO_TICKS(blinkingInterval));
-  }
-}
-
-void Sensor_Task(void *pvParameters) {
-  dht11.begin();
-  while (1) {
-    float temperature = dht11.readTemperature();
-    float humidity = dht11.readHumidity();
-    if (!isnan(temperature)) {
-      Serial.printf("Temp: %.2f°C, Humidity: %.2f%%\n", temperature, humidity);
-      tb.sendTelemetryData("temperature", temperature);
-      tb.sendTelemetryData("humidity", humidity);
-    } else {
-      Serial.println("Failed to read from DHT11!");
-    }
-    vTaskDelay(pdMS_TO_TICKS(5000));
-  }
-}
-
-RPC_Response setLedModeCallback(const RPC_Data &data) {
-  Serial.println("Received RPC call: setLedMode");
-  if (data.containsKey("params") && data["params"].containsKey("ledMode")) {
-    ledMode = data["params"]["ledMode"];
-    Serial.printf("LED mode updated: %d\n", ledMode);
-    digitalWrite(LED_PIN, ledMode ? HIGH : LOW);
-    return RPC_Response("LED mode updated", true);
-  }
-  return RPC_Response("Error: No ledMode parameter", false);
-}
-
-void MQTT_Task(void *pvParameters) {
-  while (1) {
-    if (!tb.connected()) {
-      Serial.println("Connecting to ThingsBoard...");
-      unsigned long startAttemptTime = millis();
-      const unsigned long connectionTimeout = 5000;
-      while (!tb.connect(THINGSBOARD_SERVER, TOKEN, THINGSBOARD_PORT)) {
-        if (millis() - startAttemptTime > connectionTimeout) {
-          Serial.println("MQTT connect timeout, will retry...");
-          break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000));
-      }
-      if (tb.connected()) {
-        Serial.println("Connected to ThingsBoard!");
-        tb.RPC_Subscribe(RPC_Callback("setLedMode", setLedModeCallback));
-        tb.Shared_Attributes_Subscribe(Shared_Attribute_Callback(onAttributesReceived));
-        requestSharedAttributes();
-      }
-    }
-
-    tb.loop();
-    vTaskDelay(pdMS_TO_TICKS(500));
-  }
-}
-
-// ✅ OTA từ xa: tải firmware từ ThingsBoard
-void checkFirmwareUpdate() {
-  Serial.println("Checking for firmware update...");
+// Function to handle OTA update
+void doOTAUpdate(String firmwareUrl) {
   HTTPClient http;
-  http.begin(firmware_url);
+  http.begin(firmwareUrl); // Firmware URL
   int httpCode = http.GET();
+
   if (httpCode == 200) {
-    int len = http.getSize();
-    WiFiClient *stream = http.getStreamPtr();
-    if (Update.begin(len)) {
+    int contentLength = http.getSize();
+    if (Update.begin(contentLength)) {
+      WiFiClient* stream = http.getStreamPtr();
       size_t written = Update.writeStream(*stream);
-      if (written == len) {
-        Serial.println("Firmware written successfully. Rebooting...");
-        if (Update.end(true)) {
-          ESP.restart();
-        } else {
-          Serial.printf("Update failed: %s\n", Update.errorString());
-        }
+      if (Update.end() && Update.isFinished()) {
+        Serial.println("✅ Cập nhật thành công. Restarting...");
+        delay(2000);  // Wait for 2 seconds before restarting
+        ESP.restart(); // Restart ESP32 to apply the update
       } else {
-        Serial.println("Firmware size mismatch");
-        Update.end(false);
+        Serial.println("❌ OTA lỗi.");
       }
-    } else {
-      Serial.println("Failed to begin update");
     }
   } else {
-    Serial.printf("HTTP error: %d\n", httpCode);
+    Serial.println("❌ Không tải được file OTA.");
   }
-  http.end();
+  http.end(); // Close HTTP connection
 }
 
-void FirmwareUpdate_Task(void *pvParameters) {
-  while (1) {
-    checkFirmwareUpdate();  // kiểm tra cập nhật mới
-    vTaskDelay(pdMS_TO_TICKS(60000)); // mỗi 1 phút kiểm tra lại
+// Callback function for MQTT messages
+void callback(char* topic, byte* payload, unsigned int length) {
+  String message;
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  Serial.println("📩 Nhận phản hồi: " + message);
+
+  DynamicJsonDocument doc(512);
+  DeserializationError error = deserializeJson(doc, message);
+  
+  if (error) {
+    Serial.println("❌ Lỗi phân tích JSON: " + String(error.c_str()));
+    return;  // Dừng lại nếu lỗi phân tích JSON
+  }
+
+  String newVersion = doc["fw_version"];
+  String newUrl = doc["fw_url"];
+
+  // Kiểm tra nếu fw_url hoặc fw_version không hợp lệ
+  if (newUrl == "" || newVersion == "") {
+    Serial.println("❌ URL hoặc phiên bản không hợp lệ: " + newUrl + ", " + newVersion);
+    return; // Dừng lại nếu URL hoặc phiên bản không hợp lệ
+  }
+
+  Serial.println("🚀 Có bản mới: " + newVersion + " → OTA từ " + newUrl);
+  if (newVersion != current_version) {
+    doOTAUpdate(newUrl);  // Gọi OTA nếu có bản mới
+  } else {
+    Serial.println("✅ Phiên bản đã là mới nhất.");
+  }
+}
+
+// Function to request attributes (fw_version, fw_url) from CoreIoT
+void requestAttributes() {
+  String topic = "v1/devices/me/attributes/request/1";  // Request attributes topic
+  String payload = "{\"sharedKeys\":\"fw_version,fw_url\"}"; // JSON payload for attributes
+  client.publish(topic.c_str(), payload.c_str()); // Publish request to CoreIoT
+}
+
+// Function to reconnect to MQTT server
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("⏳ Kết nối MQTT...");
+    if (client.connect("esp32_client", token, nullptr)) {  // Connect using token
+      Serial.println("✅ Kết nối MQTT thành công");
+      client.subscribe("v1/devices/me/attributes/response/1"); // Subscribe to response topic
+      requestAttributes(); // Request for attributes
+    } else {
+      Serial.print("❌ Thất bại. Lý do: ");
+      Serial.println(client.state()); // Print failure reason
+      delay(2000); // Wait 2 seconds before retrying
+    }
   }
 }
 
 void setup() {
-  Serial.begin(SERIAL_DEBUG_BAUD);
-  InitWiFi();
-  xTaskCreate(WiFi_Task, "WiFi Task", 4096, NULL, 1, NULL);
-  xTaskCreate(MQTT_Task, "MQTT Task", 8192, NULL, 1, NULL);
-  xTaskCreate(LED_Task, "LED Task", 4096, NULL, 1, NULL);
-  xTaskCreate(Sensor_Task, "Sensor Task", 4096, NULL, 2, NULL);
-  xTaskCreate(FirmwareUpdate_Task, "FirmwareUpdate Task", 8192, NULL, 1, NULL);
+  Serial.begin(115200);
+  WiFi.begin(ssid, password); // Connect to WiFi
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\n🔌 WiFi connected");
+
+  client.setServer(mqtt_server, mqtt_port); // Set MQTT server
+  client.setCallback(callback); // Set callback for MQTT messages
 }
 
 void loop() {
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  if (!client.connected()) {
+    reconnect(); // Reconnect to MQTT if disconnected
+  }
+  client.loop(); // Process MQTT messages
 }
