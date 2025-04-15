@@ -4,11 +4,11 @@
 #include <Update.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "NhuHa 2.4G";
-const char* password = "Nhuha1972@";
+const char* ssid = "";
+const char* password = "";
 const char* mqtt_server = "app.coreiot.io"; // CoreIoT server
 const int mqtt_port = 1883;
-const char* token = "jyc9u1tesgpc55n4zelk"; // Access token from CoreIoT
+const char* token = ""; // Access token from CoreIoT
 
 const char* current_version = "1"; // Current firmware version
 
@@ -27,15 +27,15 @@ void doOTAUpdate(String firmwareUrl) {
       WiFiClient* stream = http.getStreamPtr();
       size_t written = Update.writeStream(*stream);
       if (Update.end() && Update.isFinished()) {
-        Serial.println("✅ Cập nhật thành công. Restarting...");
+        Serial.println("Cap nhap thanh cong. Restarting...");
         delay(2000);  // Wait for 2 seconds before restarting
         ESP.restart(); // Restart ESP32 to apply the update
       } else {
-        Serial.println("❌ OTA lỗi.");
+        Serial.println("OTA loi.");
       }
     }
   } else {
-    Serial.println("❌ Không tải được file OTA.");
+    Serial.println(" Không tải được file OTA.");
   }
   http.end(); // Close HTTP connection
 }
@@ -46,13 +46,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   for (unsigned int i = 0; i < length; i++) {
     message += (char)payload[i];
   }
-  Serial.println("📩 Nhận phản hồi: " + message);
+  Serial.println(" Nhận phản hồi: " + message);
 
   DynamicJsonDocument doc(512);
   DeserializationError error = deserializeJson(doc, message);
   
   if (error) {
-    Serial.println("❌ Lỗi phân tích JSON: " + String(error.c_str()));
+    Serial.println(" Lỗi phân tích JSON: " + String(error.c_str()));
     return;  // Dừng lại nếu lỗi phân tích JSON
   }
 
@@ -61,15 +61,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   // Kiểm tra nếu fw_url hoặc fw_version không hợp lệ
   if (newUrl == "" || newVersion == "") {
-    Serial.println("❌ URL hoặc phiên bản không hợp lệ: " + newUrl + ", " + newVersion);
+    Serial.println(" URL hoặc phiên bản không hợp lệ: " + newUrl + ", " + newVersion);
     return; // Dừng lại nếu URL hoặc phiên bản không hợp lệ
   }
 
-  Serial.println("🚀 Có bản mới: " + newVersion + " → OTA từ " + newUrl);
+  Serial.println(" Có bản mới: " + newVersion + " → OTA từ " + newUrl);
   if (newVersion != current_version) {
     doOTAUpdate(newUrl);  // Gọi OTA nếu có bản mới
   } else {
-    Serial.println("✅ Phiên bản đã là mới nhất.");
+    Serial.println(" Phiên bản đã là mới nhất.");
   }
 }
 
@@ -83,13 +83,13 @@ void requestAttributes() {
 // Function to reconnect to MQTT server
 void reconnect() {
   while (!client.connected()) {
-    Serial.print("⏳ Kết nối MQTT...");
+    Serial.print(" Kết nối MQTT...");
     if (client.connect("esp32_client", token, nullptr)) {  // Connect using token
-      Serial.println("✅ Kết nối MQTT thành công");
+      Serial.println(" Kết nối MQTT thành công");
       client.subscribe("v1/devices/me/attributes/response/1"); // Subscribe to response topic
       requestAttributes(); // Request for attributes
     } else {
-      Serial.print("❌ Thất bại. Lý do: ");
+      Serial.print(" Thất bại. Lý do: ");
       Serial.println(client.state()); // Print failure reason
       delay(2000); // Wait 2 seconds before retrying
     }
